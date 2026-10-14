@@ -23,9 +23,49 @@ jobs:
       with:
         ndk-version: r26b
 
-    - name: Remover dependências do Windows no código C++
+    - name: Aplicar patch de compatibilidade do Windows para Linux/Android
       run: |
-        find . -type f \( -name "*.h" -o -name "*.cpp" -o -name "*.c" \) -exec sed -i 's/#include <windows.h>/#ifdef _WIN32\n#include <windows.h>\n#endif/g' {} +
+        python3 -c '
+        import os
+
+        shim = """
+        #ifndef _WIN32
+        #include <chrono>
+        #include <cmath>
+        #include <cstdint>
+
+        typedef uint32_t DWORD;
+
+        inline uint32_t timeGetTime() {
+            using namespace std::chrono;
+            return static_cast<uint32_t>(duration_cast<milliseconds>(steady_clock::now().time_since_epoch()).count());
+        }
+
+        inline int _fpclass(double val) {
+            if (std::isnan(val) || std::isinf(val)) {
+                return 0x0001;
+            }
+            return 0;
+        }
+        #endif
+        """
+
+        for root, dirs, files in os.walk("."):
+            for file in files:
+                if file in ["world.h", "main.cpp", "audio_io.cpp"]:
+                    filepath = os.path.join(root, file)
+                    with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
+                        content = f.read()
+                    
+                    if file == "world.h":
+                        content = content.replace("#include <windows.h>", "#ifdef _WIN32\n#include <windows.h>\n#endif")
+                    
+                    if "#ifndef _WIN32" not in content:
+                        content = shim + "\n" + content
+                        
+                    with open(filepath, "w", encoding="utf-8") as f:
+                        f.write(content)
+        '
 
     - name: Compilar com CMake e Android NDK
       run: |
@@ -46,3 +86,4 @@ jobs:
         name: SpaceWorld_android_${{ matrix.abi }}
         path: build_${{ matrix.abi }}/SpaceWorld*
         retention-days: 14
+        
