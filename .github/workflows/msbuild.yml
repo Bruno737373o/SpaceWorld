@@ -23,6 +23,10 @@ jobs:
       with:
         ndk-version: r26b
 
+    - name: Remover dependências do Windows no código C++
+      run: |
+        find . -type f \( -name "*.h" -o -name "*.cpp" -o -name "*.c" \) -exec sed -i 's/#include <windows.h>/#ifdef _WIN32\n#include <windows.h>\n#endif/g' {} +
+
     - name: Compilar com CMake e Android NDK
       run: |
         mkdir -p build_${{ matrix.abi }}
@@ -42,4 +46,3 @@ jobs:
         name: SpaceWorld_android_${{ matrix.abi }}
         path: build_${{ matrix.abi }}/SpaceWorld*
         retention-days: 14
-        
